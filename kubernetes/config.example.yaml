@@ -1,0 +1,8 @@
+boxImage: "ubuntu/jammy64"
+masterCpuCount: 2
+masterRam: 3072
+nodeCount: 2
+nodeCpuCount: 2
+nodeRam: 2048
+sshPubKeyPath: "C:\\mykey.pub"
+sshPrivKeyPath: "C:\\mykey"

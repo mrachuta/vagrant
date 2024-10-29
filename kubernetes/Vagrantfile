@@ -1,0 +1,59 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.require_version ">= 2.4.0"
+VAGRANTFILE_API_VERSION = "2"
+
+require 'yaml'
+
+current_dir = File.dirname(File.expand_path(__FILE__))
+begin
+  conf = YAML.load_file("#{current_dir}/config.yaml")
+rescue Errno::ENOENT
+  abort("Error: config.yaml file not found :(")
+else
+  puts("config.yaml found!")
+end
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  config.vm.define "kubemaster" do |kubemaster|
+    kubemaster.vm.box = conf["boxImage"]
+    kubemaster.vm.hostname = "kubemaster"
+    kubemaster.vm.network :private_network, ip: "192.168.56.50"
+    kubemaster.ssh.port = "2050"
+    kubemaster.vm.network :forwarded_port, guest: 22, host: 2050, id: "custom_ssh_kubemaster"
+    # Ports 80 and 443 for ingress
+    kubemaster.vm.network :forwarded_port, guest: 443, host: 443, id: "https_kubemaster"
+    kubemaster.vm.network :forwarded_port, guest: 80, host: 80, id: "http_kubemaster"
+    kubemaster.vm.network :forwarded_port, guest: 22, host: 2222, id: "ssh", disabled: true
+    kubemaster.ssh.insert_key = false
+    kubemaster.ssh.private_key_path = [conf["sshPrivKeyPath"] ,"~/.vagrant.d/insecure_private_key"]
+    kubemaster.vm.provision "file", source: conf["sshPubKeyPath"], destination: "~/.ssh/authorized_keys"
+    kubemaster.vm.synced_folder ".", "/vagrant", disabled: true
+    kubemaster.vm.provider "virtualbox" do |virtualbox|
+      virtualbox.memory = conf["masterRam"]
+      virtualbox.cpus = conf["masterCpuCount"]
+    end
+  end
+
+  (1..conf["nodeCount"]).each do |i|
+    config.vm.define "kubenode-0#{i}" do |kubenode|
+      kubenode.vm.box = conf["boxImage"]
+      kubenode.vm.hostname = "kubenode-0#{i}"
+      kubenode.vm.network :private_network, ip: "192.168.56.#{i + 50}"
+      kubenode.ssh.port = "20#{i + 50}"
+      kubenode.vm.network :forwarded_port, guest: 22, host: "20#{i + 50}", id: "custom_ssh_kubenode-0#{i}"
+      kubenode.vm.network :forwarded_port, guest: 22, host: 2222, id: "ssh", disabled: true
+      kubenode.ssh.insert_key = false
+      kubenode.ssh.private_key_path = [conf["sshPrivKeyPath"] ,"~/.vagrant.d/insecure_private_key"]
+      kubenode.vm.provision "file", source: conf["sshPubKeyPath"], destination: "~/.ssh/authorized_keys"
+      kubenode.vm.synced_folder ".", "/vagrant", disabled: true
+      kubenode.vm.provider "virtualbox" do |virtualbox|
+        virtualbox.memory = conf["nodeRam"]
+        virtualbox.cpus = conf["nodeCpuCount"]
+      end
+    end
+  end
+
+end
